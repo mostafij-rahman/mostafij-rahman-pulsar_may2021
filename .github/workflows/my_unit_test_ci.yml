@@ -1,13 +1,13 @@
 # This workflow will build a Java project with Maven
 # For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
 
-name: CI Uint Tests with Maven
+name: Java CI with Maven
 
 on:
   push:
-    branches: [master]
+    branches: [ master ]
   pull_request:
-    branches: [master]
+    branches: [ master ]
 
 env:
   MAVEN_OPTS: -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.http.retryHandler.class=standard -Dmaven.wagon.http.retryHandler.count=3
@@ -15,7 +15,7 @@ env:
 jobs:
 
   unit-tests:
-    name: run unit tests
+    name: CI Units
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -55,18 +55,24 @@ jobs:
 
       - name: Replace maven's wagon-http version
         if: ${{ steps.check_changes.outputs.docs_only != 'true' }}
-        run: sudo ./build/replace_maven-wagon-http-version.sh
-
-      - name: run unit test 'OTHER'
+        run: |
+          MAVEN_HOME=$(mvn -v |grep 'Maven home:' | awk '{ print $3 }')
+          if [ -d "$MAVEN_HOME" ]; then
+            cd "$MAVEN_HOME/lib"
+            rm wagon-http-*-shaded.jar
+            curl -O https://repo1.maven.org/maven2/org/apache/maven/wagon/wagon-http/3.4.3/wagon-http-3.4.3-shaded.jar
+          fi
+      - name: run unit tests
         if: ${{ steps.check_changes.outputs.docs_only != 'true' }}
-        run: ./build/run_unit_group.sh OTHER
-
-      - name: print JVM thread dumps when cancelled
-        if: cancelled()
-        run: ./build/pulsar_ci_tool.sh print_thread_dumps
+        run: 
+          mvn -fn clean install test  # -Dgroups='quarantine' test
+          
+          
+          # echo -n "Test Group : $TEST_GROUP"
+          #$MVN_TEST_COMMAN -Dgroups='quarantine,flaky' -DexcludedGroups='' -DtestForkCount=2
 
       - name: package surefire artifacts
-        if: failure()
+        #if: failure()
         run: |
           rm -rf artifacts
           mkdir artifacts
@@ -74,7 +80,14 @@ jobs:
           zip -r artifacts.zip artifacts
       - uses: actions/upload-artifact@master
         name: upload surefire-artifacts
-        if: failure()
+        #if: failure()
         with:
           name: surefire-artifacts
           path: artifacts.zip
+          
+     # - uses: actions/download-artifact@v2
+     #   name: download surefire-artifacts
+        #if: failure()
+     #   with:
+     #     name: surefire-artifacts
+     #     path: artifacts.zip
